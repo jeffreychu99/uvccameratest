@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手机UVC摄像头测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .status {
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        video {
+            width: 100%;
+            display: block;
+            background: #333;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102,126,234,0.4);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        button.danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .device-list {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .device-item {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .device-item:hover {
+            background: #e3e3e3;
+        }
+        
+        .device-item.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .device-item .label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .device-item .id {
+            font-size: 12px;
+            color: #666;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        
+        .device-item.active .id {
+            color: rgba(255,255,255,0.8);
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 50px;
+            display: none;
+            z-index: 1000;
+        }
+        
+        .toast.show {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                border-radius: 15px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .controls {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 手机UVC摄像头测试</h1>
+            <p>连接外置USB摄像头到手机，测试Web访问能力</p>
+            <div class="status" id="status">等待连接摄像头...</div>
+        </div>
+        
+        <div class="content">
+            <div class="video-container">
+                <video id="video" autoplay playsinline></video>
+            </div>
+            
+            <div class="controls">
+                <button id="startBtn" onclick="startCamera()">
+                    <span>▶️</span> 启动摄像头
+                </button>
+                <button id="stopBtn" onclick="stopCamera()" disabled>
+                    <span>⏹️</span> 停止摄像头
+                </button>
+                <button id="snapshotBtn" onclick="takeSnapshot()" disabled>
+                    <span>📸</span> 拍照
+                </button>
+                <button id="devicesBtn" onclick="listDevices()">
+                    <span>🔍</span> 扫描设备
+                </button>
+            </div>
+            
+            <div id="deviceList" class="device-list" style="display: none;">
+                <h3>检测到的视频设备：</h3>
+                <div id="devicesContainer"></div>
+            </div>
+            
+            <div id="snapshots" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
+    
+    <script>
+        // 全局变量
+        let currentStream = null;
+        let devices = [];
+        let currentDeviceId = null;
+        
+        // 显示提示
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+        
+        // 更新状态
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+        
+        // 启动摄像头
+        async function startCamera(deviceId = null) {
+            try {
+                updateStatus('正在请求摄像头权限...');
+                
+                // 停止之前的流
+                if (currentStream) {
+                    stopCamera();
+                }
+                
+                const constraints = {
+                    video: {
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        frameRate: { ideal: 30 }
+                    }
+                };
+                
+                // 如果有指定设备ID，使用它
+                if (deviceId) {
+                    constraints.video.deviceId = { exact: deviceId };
+                    currentDeviceId = deviceId;
+                }
+                
+                // 尝试获取媒体流
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                const video = document.getElementById('video');
+                video.srcObject = currentStream;
+                
+                // 更新UI
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('snapshotBtn').disabled = false;
+                
+                // 获取设备信息
+                const track = currentStream.getVideoTracks()[0];
+                const settings = track.getSettings();
+                
+                updateStatus(`摄像头已启动 - ${settings.width}x${settings.height} @ ${settings.frameRate || '未知'}fps`);
+                showToast('摄像头启动成功！');
+                
+                // 显示设备能力
+                try {
+                    const capabilities = track.getCapabilities();
+                    console.log('设备能力:', capabilities);
+                    
+                    // 检查是否是外置摄像头（通过分辨率判断）
+                    if (capabilities.width && capabilities.width.max >= 1920) {
+                        showToast('检测到高清摄像头，可能是外置设备');
+                    }
+                } catch (e) {
+                    console.log('无法获取设备能力:', e);
+                }
+                
+            } catch (error) {
+                console.error('启动摄像头失败:', error);
+                updateStatus(`错误: ${error.message}`);
+                showToast(`启动失败: ${error.message}`, 5000);
+                
+                // 处理常见错误
+                if (error.name === 'NotFoundError') {
+                    showToast('未找到摄像头设备，请检查连接', 5000);
+                } else if (error.name === 'NotAllowedError') {
+                    showToast('摄像头权限被拒绝，请在浏览器设置中允许', 5000);
+                } else if (error.name === 'NotReadableError') {
+                    showToast('摄像头正被其他应用使用', 5000);
+                }
+            }
+        }
+        
+        // 停止摄像头
+        function stopCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+                
+                const video = document.getElementById('video');
+                video.srcObject = null;
+                
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('snapshotBtn').disabled = true;
+                
+                updateStatus('摄像头已停止');
+                showToast('摄像头已停止');
+            }
+        }
+        
+        // 拍照
+        function takeSnapshot() {
+            if (!currentStream) return;
+            
+            const video = document.getElementById('video');
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            
+            // 设置canvas尺寸与视频相同
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // 绘制当前视频帧
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // 创建图片元素
+            const img = document.createElement('img');
+            img.src = canvas.toDataURL('image/png');
+            img.style.maxWidth = '200px';
+            img.style.margin = '10px';
+            img.style.border = '3px solid #667eea';
+            img.style.borderRadius = '10px';
+            
+            // 添加到页面
+            const snapshots = document.getElementById('snapshots');
+            const container = document.createElement('div');
+            container.style.display = 'inline-block';
+            container.appendChild(img);
+            snapshots.appendChild(container);
+            
+            showToast('拍照成功！');
+            
+            // 提供下载
+            setTimeout(() => {
+                const link = document.createElement('a');
+                link.download = `snapshot_${Date.now()}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }, 100);
+        }
+        
+        // 列出所有设备
+        async function listDevices() {
+            try {
+                updateStatus('正在扫描设备...');
+                
+                // 必须先获取权限才能获取设备标签
+                const tempStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true,
+                    audio: false 
+                });
+                
+                // 获取设备列表
+                devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                
+                // 停止临时流
+                tempStream.getTracks().forEach(track => track.stop());
+                
+                // 显示设备列表
+                const container = document.getElementById('devicesContainer');
+                const deviceList = document.getElementById('deviceList');
+                
+                container.innerHTML = '';
+                
+                if (videoDevices.length === 0) {
+                    container.innerHTML = '<p>未检测到视频设备</p>';
+                } else {
+                    videoDevices.forEach((device, index) => {
+                        const div = document.createElement('div');
+                        div.className = `device-item ${currentDeviceId === device.deviceId ? 'active' : ''}`;
+                        div.onclick = () => {
+                            if (currentDeviceId !== device.deviceId) {
+                                startCamera(device.deviceId);
+                            }
+                        };
+                        
+                        // 判断是否是外置摄像头
+                        let deviceType = '内置摄像头';
+                        const label = device.label.toLowerCase();
+                        if (label.includes('usb') || label.includes('uvc') || 
+                            label.includes('external') || label.includes('logitech')) {
+                            deviceType = '📷 外置USB摄像头';
+                        }
+                        
+                        div.innerHTML = `
+                            <div class="label">${deviceType} ${index + 1}</div>
+                            <div class="id">${device.label || '未命名设备'}</div>
+                            <div class="id">ID: ${device.deviceId.substring(0, 50)}...</div>
+                        `;
+                        
+                        container.appendChild(div);
+                    });
+                }
+                
+                deviceList.style.display = 'block';
+                updateStatus(`找到 ${videoDevices.length} 个视频设备`);
+                showToast(`扫描完成，找到 ${videoDevices.length} 个设备`);
+                
+            } catch (error) {
+                console.error('扫描设备失败:', error);
+                showToast(`扫描失败: ${error.message}`, 5000);
+                updateStatus('设备扫描失败');
+            }
+        }
+        
+        // 设备连接/断开监听
+        navigator.mediaDevices.addEventListener('devicechange', async () => {
+            showToast('设备状态发生变化，重新扫描...');
+            await listDevices();
+        });
+        
+        // 页面加载时检查兼容性
+        window.addEventListener('load', () => {
+            updateStatus('正在检查浏览器兼容性...');
+            
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                updateStatus('错误：您的浏览器不支持摄像头访问');
+                showToast('请使用Chrome、Firefox或Safari浏览器', 10000);
+                return;
+            }
+            
+            // 检查是否是HTTPS环境
+            if (window.location.protocol !== 'https:' && 
+                !window.location.hostname.includes('localhost')) {
+                updateStatus('警告：非HTTPS环境可能无法访问摄像头');
+                showToast('建议使用HTTPS或localhost访问', 5000);
+            }
+            
+            updateStatus('就绪 - 点击"启动摄像头"开始');
+        });
+        
+        // 防止页面关闭时未释放摄像头
+        window.addEventListener('beforeunload', () => {
+            if (currentStream) {
+                stopCamera();
+            }
+        });
+    </script>
+</body>
+</html>
