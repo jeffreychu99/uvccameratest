@@ -388,7 +388,7 @@
                 browserStatus.innerHTML = '⚠️ 检测到 Chrome，但USB功能可能受限';
                 browserStatus.style.color = '#FF9500';
                 log('检测到 Chrome，USB功能可能受限', 'warning');
-                return false;
+                return true;
             } else {
                 browserStatus.innerHTML = '❌ 请使用 Kiwi Browser 以获得完整功能';
                 browserStatus.style.color = '#FF3B30';
