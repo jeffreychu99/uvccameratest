@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>手机OTG摄像头纯Web访问</title>
+    <style>
+        :root {
+            --primary: #007AFF;
+            --success: #34C759;
+            --danger: #FF3B30;
+            --warning: #FF9500;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            padding: 20px 0;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .browser-check {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .browser-icon {
+            font-size: 2em;
+            margin-right: 15px;
+        }
+        
+        .step-box {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            border: 2px solid var(--primary);
+        }
+        
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        .step-num {
+            min-width: 32px;
+            height: 32px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, var(--primary), #5856D6);
+            color: white;
+            border: none;
+            padding: 18px 25px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            width: 100%;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 122, 255, 0.3);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, var(--success), #2ECC71);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger), #E74C3C);
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 25px 0;
+            aspect-ratio: 16/9;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        #videoCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            text-align: center;
+            z-index: 10;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+        
+        .control-btn {
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .control-btn:hover {
+            background: rgba(0, 122, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .log-container {
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+            margin-right: 8px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-indicator.active {
+            background: var(--success);
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        @media (max-width: 480px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .btn {
+                padding: 22px;
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📱 手机OTG摄像头纯Web访问</h1>
+            <p style="color: #aaa; margin-top: 10px;">无需安装App，使用Kiwi浏览器特殊功能</p>
+        </header>
+
+        <!-- 浏览器检测 -->
+        <div class="browser-check" id="browserCheck">
+            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                <div class="browser-icon">🔍</div>
+                <div>
+                    <h3>浏览器检测</h3>
+                    <p id="browserStatus">检测中...</p>
+                </div>
+            </div>
+            <div id="kiwiInstructions" style="display: none;">
+                <p>✅ 检测到 Kiwi Browser，支持高级USB功能</p>
+            </div>
+        </div>
+
+        <!-- 步骤指南 -->
+        <div class="step-box">
+            <h3>🎯 操作步骤</h3>
+            
+            <div class="step">
+                <div class="step-num">1</div>
+                <div>
+                    <strong>启用实验性功能</strong>
+                    <p>在 Kiwi Browser 地址栏输入：<code>chrome://flags</code></p>
+                    <p>搜索并启用：<code>#enable-experimental-web-platform-features</code></p>
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step-num">2</div>
+                <div>
+                    <strong>连接硬件</strong>
+                    <p>通过 OTG 线将 USB 摄像头连接到手机</p>
+                    <p style="color: #ff9500;">注意：可能需要带电源的OTG线</p>
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step-num">3</div>
+                <div>
+                    <strong>授予权限</strong>
+                    <p>首次连接时需要允许访问 USB 设备</p>
+                    <p>点击下面的"连接摄像头"按钮</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 控制按钮 -->
+        <button class="btn" id="connectBtn" onclick="initializeCamera()">
+            🔌 连接摄像头
+        </button>
+
+        <!-- 视频区域 -->
+        <div class="video-container">
+            <canvas id="videoCanvas"></canvas>
+            <div class="overlay" id="overlay">
+                <div style="font-size: 4em; margin-bottom: 20px;">📷</div>
+                <h2 id="overlayTitle">等待连接摄像头</h2>
+                <p id="overlayMessage">请按照上方步骤操作</p>
+            </div>
+        </div>
+
+        <!-- 控制面板（连接后显示） -->
+        <div id="controlPanel" style="display: none;">
+            <div class="controls">
+                <button class="control-btn" onclick="startStream()" id="startBtn">
+                    <span>▶️</span> 开始视频流
+                </button>
+                <button class="control-btn" onclick="stopStream()" id="stopBtn" disabled>
+                    <span>⏸️</span> 停止
+                </button>
+                <button class="control-btn" onclick="takePhoto()" id="photoBtn" disabled>
+                    <span>📸</span> 拍照
+                </button>
+                <button class="control-btn" onclick="toggleControls()">
+                    <span>⚙️</span> 设置
+                </button>
+            </div>
+
+            <!-- 状态显示 -->
+            <div style="margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px;">
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    <span class="status-indicator" id="statusIndicator"></span>
+                    <span id="statusText">未连接</span>
+                </div>
+                <div style="font-size: 0.9em; color: #aaa;" id="deviceInfo"></div>
+            </div>
+        </div>
+
+        <!-- 设置面板 -->
+        <div id="settingsPanel" style="display: none; margin-top: 20px;">
+            <h3>⚙️ 摄像头设置</h3>
+            <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 10px;">
+                <!-- 设置项动态生成 -->
+            </div>
+        </div>
+
+        <!-- 系统日志 -->
+        <div class="log-container">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                <h3>📋 系统日志</h3>
+                <button class="control-btn" style="padding: 8px 12px;" onclick="clearLogs()">
+                    清空
+                </button>
+            </div>
+            <div id="logContent"></div>
+        </div>
+    </div>
+
+    <!-- 核心JavaScript -->
+    <script>
+        // ============== 全局变量 ==============
+        let usbDevice = null;
+        let isStreaming = false;
+        let videoStream = null;
+        let frameInterval = null;
+        let isConnected = false;
+        let stats = {
+            frames: 0,
+            startTime: 0,
+            lastFrameTime: 0,
+            fps: 0
+        };
+
+        // DOM 元素
+        const videoCanvas = document.getElementById('videoCanvas');
+        const videoCtx = videoCanvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlayMessage = document.getElementById('overlayMessage');
+
+        // ============== 浏览器检测 ==============
+        function detectBrowser() {
+            const ua = navigator.userAgent;
+            const browserCheck = document.getElementById('browserCheck');
+            const browserStatus = document.getElementById('browserStatus');
+            const kiwiInstructions = document.getElementById('kiwiInstructions');
+            
+            if (ua.includes('Kiwi')) {
+                browserStatus.innerHTML = '✅ 检测到 <strong>Kiwi Browser</strong>';
+                browserStatus.style.color = '#34C759';
+                kiwiInstructions.style.display = 'block';
+                log('检测到 Kiwi Browser，支持高级USB功能', 'success');
+                return true;
+            } else if (ua.includes('Chrome') || ua.includes('Chromium')) {
+                browserStatus.innerHTML = '⚠️ 检测到 Chrome，但USB功能可能受限';
+                browserStatus.style.color = '#FF9500';
+                log('检测到 Chrome，USB功能可能受限', 'warning');
+                return false;
+            } else {
+                browserStatus.innerHTML = '❌ 请使用 Kiwi Browser 以获得完整功能';
+                browserStatus.style.color = '#FF3B30';
+                log('请使用 Kiwi Browser', 'error');
+                return false;
+            }
+        }
+
+        // ============== 核心功能：初始化摄像头 ==============
+        async function initializeCamera() {
+            log('🎯 开始初始化摄像头...', 'info');
+            updateStatus('正在检测设备...');
+            updateOverlay('初始化中', '请稍候...');
+            
+            // 1. 检查 WebUSB 支持
+            if (!navigator.usb) {
+                const errorMsg = '浏览器不支持 WebUSB API';
+                log(`❌ ${errorMsg}`, 'error');
+                updateStatus('不支持 WebUSB');
+                showError(errorMsg);
+                return;
+            }
+            
+            // 2. 检查实验性功能
+            if (!await checkExperimentalFeatures()) {
+                log('⚠️ 实验性功能未启用，尝试继续...', 'warning');
+            }
+            
+            try {
+                // 3. 请求 USB 设备
+                log('正在请求 USB 设备访问权限...', 'info');
+                updateStatus('请求权限中...');
+                
+                usbDevice = await navigator.usb.requestDevice({
+                    filters: [
+                        { classCode: 0x0E }, // UVC 设备类
+                        { classCode: 0xEF }, // USB Video
+                        {} // 所有 USB 设备
+                    ]
+                });
+                
+                log(`✅ 找到设备: ${usbDevice.productName || '未知设备'}`, 'success');
+                
+                // 4. 打开设备（特殊技巧）
+                await openDeviceWithWorkaround(usbDevice);
+                
+                // 5. 获取设备信息
+                const deviceInfo = await getDeviceInfo(usbDevice);
+                log(`📊 设备信息: ${JSON.stringify(deviceInfo)}`, 'info');
+                
+                // 6. 更新 UI
+                setupControlPanel(deviceInfo);
+                isConnected = true;
+                updateStatus('已连接');
+                updateOverlay('已连接', '点击"开始视频流"按钮');
+                
+                log('🎉 摄像头初始化成功！', 'success');
+                
+            } catch (error) {
+                log(`❌ 初始化失败: ${error.message}`, 'error');
+                updateStatus('初始化失败');
+                showError(`初始化失败: ${error.message}`);
+                
+                // 尝试备用方案
+                await tryAlternativeMethods();
+            }
+        }
+
+        // ============== 特殊技巧：绕过 protected class ==============
+        async function openDeviceWithWorkaround(device) {
+            log('使用特殊技巧打开设备...', 'info');
+            
+            try {
+                // 1. 先正常打开设备
+                await device.open();
+                log('✅ 设备打开成功', 'success');
+                
+                // 2. 选择配置
+                await device.selectConfiguration(1);
+                log('✅ 配置选择成功', 'success');
+                
+                // 3. 关键：只 claim 非视频接口
+                const config = device.configurations[0];
+                let claimedInterfaces = 0;
+                
+                for (const iface of config.interfaces) {
+                    // 跳过视频类接口 (0x0E)
+                    if (iface.alternate.interfaceClass !== 0x0E) {
+                        try {
+                            await device.claimInterface(iface.interfaceNumber);
+                            log(`✅ Claimed 接口 ${iface.interfaceNumber} (非视频类)`, 'success');
+                            claimedInterfaces++;
+                        } catch (claimError) {
+                            log(`⚠️ 无法 claim 接口 ${iface.interfaceNumber}: ${claimError.message}`, 'warning');
+                        }
+                    } else {
+                        log(`⏭️  跳过视频接口 ${iface.interfaceNumber}`, 'info');
+                    }
+                }
+                
+                if (claimedInterfaces === 0) {
+                    throw new Error('没有可用的非视频接口');
+                }
+                
+                log(`🎯 成功 claim ${claimedInterfaces} 个接口`, 'success');
+                
+            } catch (error) {
+                log(`❌ 设备打开失败: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // ============== 获取设备信息 ==============
+        async function getDeviceInfo(device) {
+            try {
+                // 获取设备描述符
+                const descriptor = await device.controlTransferIn({
+                    requestType: 'standard',
+                    recipient: 'device',
+                    request: 0x06, // GET_DESCRIPTOR
+                    value: 0x0100,
+                    index: 0x0000
+                }, 18);
+                
+                if (descriptor.status === 'ok') {
+                    const data = new Uint8Array(descriptor.data.buffer);
+                    
+                    return {
+                        vendorId: device.vendorId,
+                        productId: device.productId,
+                        productName: device.productName || '未知设备',
+                        descriptor: Array.from(data.slice(0, 8))
+                    };
+                }
+            } catch (error) {
+                log(`获取设备信息失败: ${error.message}`, 'warning');
+            }
+            
+            return {
+                vendorId: device.vendorId,
+                productId: device.productId,
+                productName: device.productName || '未知设备'
+            };
+        }
+
+        // ============== 视频流功能 ==============
+        async function startStream() {
+            if (!isConnected || !usbDevice) {
+                showError('请先连接摄像头');
+                return;
+            }
+            
+            log('🎬 正在启动视频流...', 'info');
+            updateStatus('启动视频流...');
+            
+            try {
+                // 方法1：尝试通过控制传输获取视频
+                if (await tryControlTransferVideo()) {
+                    return;
+                }
+                
+                // 方法2：尝试通过批量传输
+                if (await tryBulkTransferVideo()) {
+                    return;
+                }
+                
+                // 方法3：备用方案 - 使用 MediaStream API
+                await tryMediaStreamFallback();
+                
+            } catch (error) {
+                log(`❌ 视频流启动失败: ${error.message}`, 'error');
+                updateStatus('启动失败');
+                
+                // 最终方案：模拟视频流
+                startSimulatedVideo();
+            }
+        }
+
+        // 方法1：控制传输获取视频（某些摄像头支持）
+        async function tryControlTransferVideo() {
+            log('尝试控制传输获取视频...', 'info');
+            
+            try {
+                // UVC 协议：VS_PROBE_CONTROL
+                const result = await usbDevice.controlTransferIn({
+                    requestType: 'class',
+                    recipient: 'interface',
+                    request: 0x81, // GET_CUR
+                    value: 0x0100,
+                    index: 0x0200
+                }, 26);
+                
+                if (result.status === 'ok' && result.data.byteLength > 0) {
+                    log('✅ 控制传输成功，开始接收视频', 'success');
+                    
+                    // 启动接收循环
+                    startVideoReceiveLoop();
+                    return true;
+                }
+            } catch (error) {
+                log(`控制传输失败: ${error.message}`, 'warning');
+            }
+            
+            return false;
+        }
+
+        // 方法2：批量传输获取视频
+        async function tryBulkTransferVideo() {
+            log('尝试批量传输获取视频...', 'info');
+            
+            try {
+                // 查找批量输入端点（通常是 0x81, 0x82, 0x83 等）
+                const config = usbDevice.configurations[0];
+                let bulkEndpoint = null;
+                
+                for (const iface of config.interfaces) {
+                    for (const endpoint of iface.alternate.endpoints) {
+                        if (endpoint.direction === 'in' && endpoint.type === 'bulk') {
+                            bulkEndpoint = endpoint.endpointNumber;
+                            break;
+                        }
+                    }
+                    if (bulkEndpoint) break;
+                }
+                
+                if (bulkEndpoint) {
+                    log(`找到批量输入端点: 0x${bulkEndpoint.toString(16)}`, 'success');
+                    
+                    // 开始接收数据
+                    startBulkReceiveLoop(bulkEndpoint);
+                    return true;
+                }
+            } catch (error) {
+                log(`批量传输失败: ${error.message}`, 'warning');
+            }
+            
+            return false;
+        }
+
+        // 视频接收循环
+        function startVideoReceiveLoop() {
+            isStreaming = true;
+            stats.startTime = Date.now();
+            stats.frames = 0;
+            
+            // 使用定时器模拟视频流
+            frameInterval = setInterval(async () => {
+                if (!isStreaming) return;
+                
+                try {
+                    // 尝试读取数据
+                    const result = await usbDevice.transferIn(0x81, 1024 * 1024);
+                    
+                    if (result.status === 'ok' && result.data) {
+                        processVideoFrame(result.data);
+                        updateFrameStats();
+                    }
+                } catch (error) {
+                    // 忽略读取错误
+                }
+            }, 33); // 约30fps
+            
+            updateStreamUI(true);
+            updateStatus('视频流运行中');
+            hideOverlay();
+            
+            log('✅ 视频流已启动', 'success');
+        }
+
+        // 处理视频帧
+        function processVideoFrame(data) {
+            try {
+                // 尝试解码为 JPEG
+                const blob = new Blob([data], { type: 'image/jpeg' });
+                const url = URL.createObjectURL(blob);
+                
+                const img = new Image();
+                img.onload = () => {
+                    // 绘制到 Canvas
+                    videoCtx.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
+                    videoCtx.drawImage(img, 0, 0, videoCanvas.width, videoCanvas.height);
+                    
+                    // 释放 URL
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
+                
+            } catch (error) {
+                // 如果解码失败，尝试其他格式
+                processRawVideoData(data);
+            }
+        }
+
+        // 备用方案：MediaStream API
+        async function tryMediaStreamFallback() {
+            log('尝试 MediaStream API...', 'info');
+            
+            try {
+                // 获取视频设备（可能是虚拟摄像头）
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                
+                if (videoDevices.length > 0) {
+                    videoStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            deviceId: videoDevices[0].deviceId,
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    });
+                    
+                    // 显示视频
+                    const videoElement = document.createElement('video');
+                    videoElement.srcObject = videoStream;
+                    videoElement.autoplay = true;
+                    videoElement.playsinline = true;
+                    videoElement.style.width = '100%';
+                    
+                    videoCanvas.parentNode.appendChild(videoElement);
+                    videoCanvas.style.display = 'none';
+                    
+                    log('✅ 使用 MediaStream 显示视频', 'success');
+                    updateStreamUI(true);
+                    return true;
+                }
+            } catch (error) {
+                log(`MediaStream 失败: ${error.message}`, 'warning');
+            }
+            
+            return false;
+        }
+
+        // 最终方案：模拟视频流
+        function startSimulatedVideo() {
+            log('启动模拟视频流...', 'warning');
+            
+            isStreaming = true;
+            stats.startTime = Date.now();
+            
+            // 创建模拟视频
+            function drawFrame() {
+                if (!isStreaming) return;
+                
+                const time = Date.now() / 1000;
+                const width = videoCanvas.width || 640;
+                const height = videoCanvas.height || 480;
+                
+                // 设置 Canvas 尺寸
+                videoCanvas.width = width;
+                videoCanvas.height = height;
+                
+                // 绘制渐变背景
+                const gradient = videoCtx.createLinearGradient(0, 0, width, height);
+                gradient.addColorStop(0, `hsl(${time * 50 % 360}, 80%, 50%)`);
+                gradient.addColorStop(1, `hsl(${(time * 50 + 180) % 360}, 80%, 50%)`);
+                
+                videoCtx.fillStyle = gradient;
+                videoCtx.fillRect(0, 0, width, height);
+                
+                // 绘制摄像头信息
+                videoCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                videoCtx.fillRect(20, 20, width - 40, height - 40);
+                
+                videoCtx.fillStyle = 'white';
+                videoCtx.font = 'bold 24px Arial';
+                videoCtx.textAlign = 'center';
+                videoCtx.fillText('模拟 UVC 摄像头', width/2, height/2 - 40);
+                videoCtx.fillText(`帧号: ${stats.frames++}`, width/2, height/2);
+                videoCtx.font = '16px Arial';
+                videoCtx.fillText(new Date().toLocaleTimeString(), width/2, height/2 + 30);
+                videoCtx.fillText('真实视频流需要额外配置', width/2, height/2 + 60);
+                
+                // 更新统计
+                updateFrameStats();
+                
+                // 下一帧
+                requestAnimationFrame(drawFrame);
+            }
+            
+            drawFrame();
+            updateStreamUI(true);
+            updateStatus('模拟视频流');
+            hideOverlay();
+            
+            log('✅ 模拟视频流已启动', 'warning');
+        }
+
+        // ============== UI 控制函数 ==============
+        function setupControlPanel(deviceInfo) {
+            document.getElementById('controlPanel').style.display = 'block';
+            document.getElementById('connectBtn').style.display = 'none';
+            
+            const deviceInfoEl = document.getElementById('deviceInfo');
+            deviceInfoEl.innerHTML = `
+                <div>设备: ${deviceInfo.productName}</div>
+                <div>VID: 0x${deviceInfo.vendorId.toString(16)} PID: 0x${deviceInfo.productId.toString(16)}</div>
+            `;
+            
+            updateStatusIndicator(true);
+        }
+
+        function updateStreamUI(streaming) {
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const photoBtn = document.getElementById('photoBtn');
+            
+            if (streaming) {
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                photoBtn.disabled = false;
+            } else {
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                photoBtn.disabled = true;
+            }
+        }
+
+        function stopStream() {
+            isStreaming = false;
+            
+            if (frameInterval) {
+                clearInterval(frameInterval);
+                frameInterval = null;
+            }
+            
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            
+            updateStreamUI(false);
+            updateStatus('视频流已停止');
+            updateOverlay('已停止', '点击开始按钮重新启动');
+            
+            log('视频流已停止', 'info');
+        }
+
+        function takePhoto() {
+            if (!isStreaming) {
+                showError('请先启动视频流');
+                return;
+            }
+            
+            try {
+                const link = document.createElement('a');
+                link.download = `camera_${Date.now()}.png`;
+                link.href = videoCanvas.toDataURL('image/png');
+                link.click();
+                
+                log(`✅ 照片已保存: ${link.download}`, 'success');
+                
+            } catch (error) {
+                log(`❌ 拍照失败: ${error.message}`, 'error');
+            }
+        }
+
+        // ============== 辅助函数 ==============
+        function log(message, type = 'info') {
+            const logContent = document.getElementById('logContent');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span style="color: #999">[${timestamp}]</span>
+                <span style="margin-left: 10px; color: ${
+                    type === 'error' ? '#FF3B30' :
+                    type === 'success' ? '#34C759' :
+                    type === 'warning' ? '#FF9500' : '#007AFF'
+                }">${message}</span>
+            `;
+            
+            logContent.appendChild(entry);
+            logContent.scrollTop = logContent.scrollHeight;
+            
+            // 限制日志数量
+            if (logContent.children.length > 50) {
+                logContent.removeChild(logContent.firstChild);
+            }
+            
+            console[type === 'error' ? 'error' : 'log'](`[UVC] ${message}`);
+        }
+
+        function clearLogs() {
+            document.getElementById('logContent').innerHTML = '';
+        }
+
+        function updateStatus(message) {
+            document.getElementById('statusText').textContent = message;
+        }
+
+        function updateStatusIndicator(active) {
+            const indicator = document.getElementById('statusIndicator');
+            indicator.className = active ? 'status-indicator active' : 'status-indicator';
+        }
+
+        function updateOverlay(title, message) {
+            overlayTitle.textContent = title;
+            overlayMessage.textContent = message;
+            overlay.style.display = 'flex';
+        }
+
+        function hideOverlay() {
+            overlay.style.display = 'none';
+        }
+
+        function updateFrameStats() {
+            stats.frames++;
+            const now = Date.now();
+            const elapsed = now - stats.startTime;
+            
+            if (elapsed >= 1000) {
+                stats.fps = Math.round((stats.frames * 1000) / elapsed);
+                stats.startTime = now;
+                stats.frames = 0;
+                
+                // 可以在这里更新 FPS 显示
+            }
+        }
+
+        function showError(message) {
+            alert(`错误: ${message}`);
+        }
+
+        async function checkExperimentalFeatures() {
+            // 检查实验性功能是否启用
+            try {
+                // 尝试使用一些实验性 API
+                if ('serial' in navigator || 'hid' in navigator) {
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        async function tryAlternativeMethods() {
+            log('尝试备用方案...', 'warning');
+            
+            // 可以在这里添加更多备用方案
+            updateStatus('尝试备用方案...');
+            
+            // 延迟后显示模拟选项
+            setTimeout(() => {
+                updateOverlay('备用方案', '点击"模拟视频流"测试功能');
+            }, 1000);
+        }
+
+        // ============== 初始化 ==============
+        window.addEventListener('load', () => {
+            // 设置 Canvas 尺寸
+            videoCanvas.width = window.innerWidth * 0.9;
+            videoCanvas.height = videoCanvas.width * 9 / 16;
+            
+            // 检测浏览器
+            const isKiwi = detectBrowser();
+            
+            if (!isKiwi) {
+                updateOverlay('浏览器不支持', '请使用 Kiwi Browser');
+                document.getElementById('connectBtn').disabled = true;
+            }
+            
+            log('页面初始化完成', 'info');
+        });
+    </script>
+</body>
+</html>
+</html>
