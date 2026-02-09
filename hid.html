@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UVC摄像头 Web访问（HID方案）</title>
+    <style>
+         * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a237e 0%, #311b92 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00bcd4, #3d5afe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: #b0bec5;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel-title {
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title i {
+            font-size: 1.2em;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #3d5afe 0%, #2979ff 100%);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 50px;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(61, 90, 254, 0.3);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #546e7a;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        button.primary {
+            background: linear-gradient(135deg, #00c853 0%, #64dd17 100%);
+        }
+
+        button.danger {
+            background: linear-gradient(135deg, #ff3d00 0%, #ff9100 100%);
+        }
+
+        button.warning {
+            background: linear-gradient(135deg, #ff9100 0%, #ffd600 100%);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background: #f44336;
+        }
+
+        .status-indicator.connected {
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+        }
+
+        #videoCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #3d5afe;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #b0bec5;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .log-container {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+        }
+
+        .log-entry.info {
+            color: #29b6f6;
+        }
+
+        .log-entry.success {
+            color: #66bb6a;
+        }
+
+        .log-entry.warning {
+            color: #ffb74d;
+        }
+
+        .log-entry.error {
+            color: #ef5350;
+        }
+
+        .resolution-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .resolution-btn {
+            padding: 8px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .resolution-btn:hover {
+            background: rgba(61, 90, 254, 0.3);
+        }
+
+        .resolution-btn.active {
+            background: #3d5afe;
+            border-color: #3d5afe;
+        }
+
+        .config-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .config-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #b0bec5;
+        }
+
+        select, input[type="range"] {
+            width: 100%;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            color: white;
+        }
+
+        .range-value {
+            display: inline-block;
+            margin-left: 10px;
+            min-width: 40px;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #b0bec5;
+            font-size: 0.9em;
+        }
+
+        .compatibility-warning {
+            background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .instruction-box {
+            background: rgba(0, 150, 136, 0.2);
+            border: 2px solid #009688;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .instruction-box ol {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        .instruction-box li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📹 UVC摄像头 Web访问方案</h1>
+            <p class="subtitle">使用 WebHID + WebCodecs API 绕过保护限制</p>
+        </header>
+
+        <div class="instruction-box">
+            <strong>注意：WebUSB 无法直接访问视频设备</strong>
+            <ol>
+                <li>方案1：使用 WebHID 控制 + 视频流分离（推荐）</li>
+                <li>方案2：安装浏览器扩展/插件</li>
+                <li>方案3：使用本地代理服务器</li>
+                <li>方案4：使用 MediaDevices API（仅限内置摄像头）</li>
+            </ol>
+        </div>
+
+        <!-- 内容区域 -->
+        <div class="main-content">
+            <div class="panel">
+                <div class="panel-title">🎥 视频预览</div>
+                <div class="video-container">
+                    <video id="videoElement" autoplay playsinline></video>
+                    <canvas id="videoCanvas" style="display:none;"></canvas>
+                    <div class="video-overlay" id="overlay">
+                        等待视频流...
+                    </div>
+                </div>
+                <div class="controls-grid">
+                    <button onclick="startHIDControl()">🎮 连接HID控制</button>
+                    <button onclick="startVideoStream()">▶️ 开始视频流</button>
+                    <button onclick="captureFrame()">📸 拍照</button>
+                    <button onclick="stopAll()">⏹️ 停止所有</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">⚙️ 控制面板</div>
+                <!-- 控制面板内容 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let hidDevice = null;
+        let videoStream = null;
+        let isControlling = false;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+
+        // 检查 HID 支持
+        function checkHIDSupport() {
+            if (!navigator.hid) {
+                alert('您的浏览器不支持 WebHID API，请使用 Chrome 89+');
+                return false;
+            }
+            return true;
+        }
+
+        // 通过 HID 控制摄像头参数
+        async function startHIDControl() {
+            if (!checkHIDSupport()) return;
+
+            try {
+                // 请求 HID 设备
+                const devices = await navigator.hid.requestDevice({
+                    filters: [
+                        // 添加视频控制相关的 HID 设备过滤器
+                        { usagePage: 0xFF00 },  // 供应商自定义
+                        { usagePage: 0x0C }     // 消费电子控制
+                    ]
+                });
+
+                if (devices.length === 0) {
+                    alert('未选择设备');
+                    return;
+                }
+
+                hidDevice = devices[0];
+                await hidDevice.open();
+                
+                log('success', 'HID 控制连接成功');
+                isControlling = true;
+                
+                // 发送初始控制命令
+                await sendHIDCommand(0x01, [0x00]); // 查询状态
+                
+            } catch (error) {
+                log('error', `HID 连接失败: ${error.message}`);
+            }
+        }
+
+        // 发送 HID 命令
+        async function sendHIDCommand(reportId, data) {
+            if (!hidDevice) return;
+            
+            try {
+                await hidDevice.sendReport(reportId, new Uint8Array(data));
+                log('info', `HID 命令发送: ${data.toString()}`);
+            } catch (error) {
+                log('error', `HID 命令失败: ${error.message}`);
+            }
+        }
+
+        // 通过 MediaDevices API 获取视频流
+        async function startVideoStream() {
+            try {
+                // 使用 MediaDevices API（仅限内置摄像头或虚拟摄像头）
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 }
+                    },
+                    audio: false
+                });
+
+                const videoElement = document.getElementById('videoElement');
+                videoElement.srcObject = videoStream;
+                
+                log('success', '视频流获取成功');
+                document.getElementById('overlay').style.display = 'none';
+                
+            } catch (error) {
+                log('error', `视频流获取失败: ${error.message}`);
+                
+                // 如果无法获取摄像头，尝试使用虚拟源
+                createTestPattern();
+            }
+        }
+
+        // 创建测试图案（备用）
+        function createTestPattern() {
+            const canvas = document.getElementById('videoCanvas');
+            const ctx = canvas.getContext('2d');
+            const videoElement = document.getElementById('videoElement');
+            
+            canvas.style.display = 'block';
+            videoElement.style.display = 'none';
+            
+            function drawPattern() {
+                const time = Date.now() / 1000;
+                const width = canvas.width;
+                const height = canvas.height;
+                
+                // 创建渐变背景
+                const gradient = ctx.createLinearGradient(0, 0, width, height);
+                gradient.addColorStop(0, `hsl(${time * 50 % 360}, 100%, 50%)`);
+                gradient.addColorStop(1, `hsl(${(time * 50 + 180) % 360}, 100%, 50%)`);
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, width, height);
+                
+                // 绘制图案
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('测试图案', width / 2, height / 2);
+                
+                ctx.font = '24px Arial';
+                ctx.fillText(new Date().toLocaleTimeString(), width / 2, height / 2 + 50);
+                
+                requestAnimationFrame(drawPattern);
+            }
+            
+            drawPattern();
+            log('info', '使用测试图案模式');
+        }
+
+        // 拍照功能
+        function captureFrame() {
+            const canvas = document.createElement('canvas');
+            const video = document.getElementById('videoElement');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.download = `capture_${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            
+            log('success', '照片已保存');
+        }
+
+        // 停止所有
+        function stopAll() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            
+            if (hidDevice) {
+                hidDevice.close();
+                hidDevice = null;
+            }
+            
+            isControlling = false;
+            log('info', '所有连接已停止');
+        }
+
+        // 日志函数
+        function log(type, message) {
+            console.log(`[${type}] ${message}`);
+            // 可以添加到页面日志显示
+        }
+
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', stopAll);
+    </script>
+</body>
+</html>
+  
+</html>
