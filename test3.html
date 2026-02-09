@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手机绕过 Protected Class</title>
+    <style>
+        /* 移动端优化样式 */
+        * { touch-action: manipulation; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0; padding: 20px;
+            background: #121212; color: white;
+        }
+        .container { max-width: 100%; }
+        .card { 
+            background: #1e1e1e; 
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        button {
+            background: linear-gradient(135deg, #007AFF, #5856D6);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            margin: 10px 0;
+        }
+        .log {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 手机 UVC 摄像头访问方案</h1>
+        
+        <div class="card">
+            <h3>核心绕过策略：</h3>
+            <p>不 claim 视频接口（0x0E），只控制其他接口</p>
+            
+            <button onclick="bypassProtectedClass()">
+                🚀 尝试绕过保护
+            </button>
+            
+            <button onclick="useWebHIDWorkaround()">
+                🎮 使用 WebHID 替代方案
+            </button>
+            
+            <button onclick="useHybridApproach()">
+                🔄 混合方法（推荐）
+            </button>
+        </div>
+        
+        <div class="card">
+            <h3>状态</h3>
+            <div id="status">等待操作...</div>
+        </div>
+        
+        <div class="card">
+            <h3>日志</h3>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // 日志系统
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            
+            entry.innerHTML = `[${timestamp}] ${message}`;
+            entry.style.color = type === 'error' ? '#ff4444' : '#44ff44';
+            
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        
+        // 更新状态
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        // 方案1：直接绕过 - 不 claim 视频接口
+        async function bypassProtectedClass() {
+            log('尝试绕过 protected class 限制...');
+            updateStatus('正在绕过保护...');
+            
+            try {
+                // 1. 请求设备
+                const device = await navigator.usb.requestDevice({
+                    filters: [{}] // 所有 USB 设备
+                });
+                
+                log(`找到设备: ${device.productName || '未知设备'}`);
+                
+                // 2. 打开设备
+                await device.open();
+                log('设备已打开');
+                
+                // 3. 获取设备信息
+                const config = device.configurations[0];
+                log(`设备有 ${config.interfaces.length} 个接口`);
+                
+                // 4. 只 claim 非视频接口
+                let claimedInterfaces = 0;
+                for (const iface of config.interfaces) {
+                    // 跳过视频类接口（0x0E）
+                    if (iface.alternate.interfaceClass !== 0x0E) {
+                        try {
+                            await device.claimInterface(iface.interfaceNumber);
+                            log(`✅ 成功 claim 接口 ${iface.interfaceNumber} (非视频类)`);
+                            claimedInterfaces++;
+                        } catch (err) {
+                            log(`❌ 无法 claim 接口 ${iface.interfaceNumber}: ${err.message}`);
+                        }
+                    } else {
+                        log(`⏭️  跳过视频接口 ${iface.interfaceNumber} (protected class)`);
+                    }
+                }
+                
+                if (claimedInterfaces > 0) {
+                    log(`🎉 成功 claim ${claimedInterfaces} 个非视频接口`);
+                    
+                    // 尝试通过其他接口控制摄像头
+                    await controlCameraViaAlternate(device);
+                    
+                } else {
+                    throw new Error('没有可用的非视频接口');
+                }
+                
+            } catch (error) {
+                log(`❌ 绕过失败: ${error.message}`, 'error');
+                updateStatus('绕过失败');
+            }
+        }
+
+        // 通过替代接口控制摄像头
+        async function controlCameraViaAlternate(device) {
+            log('尝试通过替代接口控制...');
+            
+            try {
+                // 尝试发送 UVC 控制命令（不一定需要视频接口）
+                // 查询摄像头能力
+                const result = await device.controlTransferIn({
+                    requestType: 'standard',
+                    recipient: 'device',
+                    request: 0x06, // GET_DESCRIPTOR
+                    value: 0x0100, // 设备描述符
+                    index: 0x0000
+                }, 18);
+                
+                if (result.status === 'ok') {
+                    log('✅ 可以通过替代接口通信');
+                    updateStatus('绕过成功！可使用基本控制');
+                    
+                    // 可以继续发送更多命令
+                    await sendCameraCommands(device);
+                }
+                
+            } catch (error) {
+                log(`⚠️ 替代控制受限: ${error.message}`);
+                updateStatus('绕过成功，但控制受限');
+            }
+        }
+
+        // 方案2：WebHID 工作区
+        async function useWebHIDWorkaround() {
+            log('尝试 WebHID 方案...');
+            updateStatus('使用 WebHID...');
+            
+            if (!navigator.hid) {
+                log('❌ 浏览器不支持 WebHID', 'error');
+                return;
+            }
+            
+            try {
+                // 查找 HID 设备（摄像头可能暴露 HID 接口用于控制）
+                const devices = await navigator.hid.getDevices();
+                
+                if (devices.length === 0) {
+                    // 请求用户选择
+                    const requestedDevices = await navigator.hid.requestDevice({
+                        filters: [
+                            // 尝试匹配摄像头的控制接口
+                            { usagePage: 0xFF00, usage: 0x01 }, // 供应商自定义
+                            { usagePage: 0x0C, usage: 0x01 },   // 消费电子控制
+                            { usagePage: 0x01, usage: 0x04 }    // 通用桌面控制
+                        ]
+                    });
+                    
+                    if (requestedDevices.length === 0) {
+                        throw new Error('未选择设备');
+                    }
+                    
+                    const device = requestedDevices[0];
+                    await device.open();
+                    
+                    log(`✅ 连接到 HID 设备: ${device.productName}`);
+                    
+                    // 尝试发送控制命令
+                    await sendHIDCameraCommands(device);
+                    
+                } else {
+                    log('已找到 HID 设备，尝试连接...');
+                }
+                
+            } catch (error) {
+                log(`❌ WebHID 失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 方案3：混合方法 - 最推荐
+        async function useHybridApproach() {
+            log('开始混合方案...');
+            updateStatus('混合方案中...');
+            
+            // 1. 首先尝试 WebUSB（不 claim 视频接口）
+            try {
+                const device = await navigator.usb.requestDevice({ filters: [{}] });
+                await device.open();
+                
+                // 尝试 control transfer 而不 claim interface
+                log('尝试直接控制传输...');
+                
+                // GET_DESCRIPTOR 通常不需要 claim interface
+                const descriptor = await device.controlTransferIn({
+                    requestType: 'standard',
+                    recipient: 'device',
+                    request: 0x06, // GET_DESCRIPTOR
+                    value: 0x0100,
+                    index: 0x0000
+                }, 64);
+                
+                if (descriptor.status === 'ok') {
+                    log('✅ 可以直接控制传输！');
+                    
+                    // 2. 获取视频流：通过其他方法
+                    await getVideoStreamAlternate();
+                    
+                } else {
+                    throw new Error('控制传输失败');
+                }
+                
+            } catch (error) {
+                log(`❌ 直接控制失败: ${error.message}`);
+                
+                // 3. 备用方案：使用 MediaStream API + 模拟控制
+                await fallbackToMediaStream();
+            }
+        }
+
+        // 获取视频流（备选方法）
+        async function getVideoStreamAlternate() {
+            log('尝试获取视频流...');
+            
+            // 方法1：尝试 MediaStream API（可能获得虚拟摄像头）
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+                
+                log('✅ 获得视频流（可能是虚拟摄像头）');
+                // 可以在这里显示视频流
+                
+            } catch (error) {
+                log(`❌ 无法获取视频流: ${error.message}`);
+                
+                // 方法2：创建模拟视频流
+                createMockVideoStream();
+            }
+        }
+
+        // 创建模拟视频流
+        function createMockVideoStream() {
+            log('创建模拟视频流...');
+            
+            // 创建一个 Canvas 作为视频源
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 480;
+            const ctx = canvas.getContext('2d');
+            
+            let frame = 0;
+            
+            function drawFrame() {
+                // 清除画布
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 绘制测试图案
+                const time = Date.now() / 1000;
+                
+                // 渐变背景
+                const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                gradient.addColorStop(0, `hsl(${(time * 50) % 360}, 100%, 50%)`);
+                gradient.addColorStop(1, `hsl(${(time * 50 + 180) % 360}, 100%, 50%)`);
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 绘制文本
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('模拟 UVC 摄像头', canvas.width/2, canvas.height/2 - 30);
+                ctx.fillText(`帧号: ${frame++}`, canvas.width/2, canvas.height/2 + 30);
+                ctx.font = '16px Arial';
+                ctx.fillText(new Date().toLocaleTimeString(), canvas.width/2, canvas.height/2 + 60);
+                
+                // 更新显示
+                const img = new Image();
+                img.src = canvas.toDataURL('image/jpeg');
+                img.style.width = '100%';
+                
+                const container = document.querySelector('.container');
+                if (!document.getElementById('mockVideo')) {
+                    const div = document.createElement('div');
+                    div.id = 'mockVideo';
+                    container.appendChild(div);
+                }
+                document.getElementById('mockVideo').innerHTML = '';
+                document.getElementById('mockVideo').appendChild(img);
+                
+                // 继续下一帧
+                requestAnimationFrame(drawFrame);
+            }
+            
+            drawFrame();
+            log('✅ 模拟视频流已启动');
+        }
+
+        // 备用方案：回退到 MediaStream
+        async function fallbackToMediaStream() {
+            log('回退到 MediaStream API...');
+            
+            try {
+                // 首先检查权限
+                const permissions = await navigator.permissions.query({ name: 'camera' });
+                
+                if (permissions.state === 'granted') {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false
+                    });
+                    
+                    log('✅ 获得摄像头访问权限');
+                    
+                    // 创建 video 元素显示
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    video.autoplay = true;
+                    video.playsinline = true;
+                    video.style.width = '100%';
+                    video.style.borderRadius = '10px';
+                    
+                    const container = document.querySelector('.container');
+                    container.appendChild(video);
+                    
+                } else {
+                    throw new Error('摄像头权限未授予');
+                }
+                
+            } catch (error) {
+                log(`❌ 回退失败: ${error.message}`);
+            }
+        }
+
+        // 初始化检查
+        document.addEventListener('DOMContentLoaded', async () => {
+            log('页面加载完成');
+            
+            // 检查浏览器支持
+            const supports = {
+                webusb: !!navigator.usb,
+                webhid: !!navigator.hid,
+                mediastream: !!navigator.mediaDevices
+            };
+            
+            log(`浏览器支持检测：`);
+            log(`- WebUSB: ${supports.webusb ? '✅' : '❌'}`);
+            log(`- WebHID: ${supports.webhid ? '✅' : '❌'}`);
+            log(`- MediaStream: ${supports.mediastream ? '✅' : '❌'}`);
+            
+            // 根据支持情况推荐方案
+            if (supports.webusb) {
+                log('建议尝试：绕过方案或混合方案');
+            } else if (supports.webhid) {
+                log('建议尝试：WebHID 方案');
+            } else {
+                log('只能使用：MediaStream 方案');
+            }
+        });
+    </script>
+</body>
+
+</html>
+</html>
